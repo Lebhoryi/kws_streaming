@@ -1,7 +1,7 @@
 # coding=utf-8
 '''
 @ Summary: 输入音频文件, 测试模型准确率
-@ Update:  
+@ Update:  增加模型误唤醒率和唤醒率散点图
 
 @ file:    stream_inference.py
 @ version: 1.0.0
@@ -16,14 +16,13 @@ sys.path.append('../..')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import tensorflow as tf
-
 from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import gen_audio_ops as audio_ops
 
 # If it's available, load the specialized feature generator. If this doesn't
 # work, try building with bazel instead of running the Python script directly.
 try:
-    from tensorflow.lite.experimental.microfrontend.python.ops import audio_microfrontend_op as frontend_op  # pylint:disable=g-import-not-at-top
+    from tensorflow.lite.experimental.microfrontend.python.ops import audio_microfrontend_op as frontend_op
 except ImportError:
     frontend_op = None
 
@@ -33,6 +32,8 @@ import json
 import scipy
 import scipy.io.wavfile as wav
 import scipy.signal
+from sklearn.metrics import accuracy_score, confusion_matrix, \
+            precision_score, recall_score, f1_score
 import tensorflow.compat.v1 as tf1
 
 import logging
@@ -52,24 +53,6 @@ MAX_ABS_INT16 = 32768
 
 def get_wav(wav_file, flags, target_sample_rate=16000, flag=False):
     """ 读取 wav 文件, 返回 input_data 和 采样率"""
-    # with tf.io.gfile.GFile(wav_file, 'rb') as file_handle:
-    #     samplerate, wave_data = wav.read(file_handle)
-    #
-    # desired_length = int(
-    #     round(float(len(wave_data)) / samplerate * target_sample_rate))
-    # wave_data = scipy.signal.resample(wave_data, desired_length)
-    #
-    # # Normalize short ints to floats in range [-1..1).
-    # data = np.array(wave_data, np.float32) / 32768.0
-    #
-    # if flag:
-    #     plt.plot(wave_data)
-    # plt.show()
-    #
-    # # pad input audio with zeros, so that audio len = flags.desired_samples
-    # padded_wav = np.pad(wave_data, (0, flags.desired_samples-len(wave_data)),
-    #                     'constant')
-
     wav_loader = io_ops.read_file(wav_file)
     wav_decoder = tf.audio.decode_wav(
         wav_loader, desired_channels=1, desired_samples=flags.desired_samples)
@@ -152,7 +135,7 @@ def pre_model(train_dir, flags, modes=Modes.NON_STREAM_INFERENCE):
     # Load model's weights
     weights_name = 'best_weights'
     model_non_stream_batch.load_weights(train_dir/weights_name).expect_partial()
-    model_non_stream_batch.summary()
+    # model_non_stream_batch.summary()
 
     # convert model to inference mode with batch one
     inference_batch_size = 1
@@ -242,17 +225,16 @@ def np_softmax(logits):
     return softmax_x
 
 
-def print_details(wav_file, index_to_label, predicted_labels, predictions,
-                  top):
+def print_details(wav_file, index_to_label, predicted_labels, predictions):
     print(f"file name: {wav_file.name}")
     print(f"predicted label: {index_to_label[predicted_labels]}")
-    print(f"scores: {predictions[top[-1]]:.4f}")
+    print(f"scores: {predictions[predicted_labels]:.4f}")
     print("=="*15)
     print()
 
 
-def wav_inference(wav_file, model, flags, index_to_label, wanted_words, count,
-                  Threshold=0.8):
+def wav_inference(wav_file, model, flags, index_to_label, wanted_words,
+                  Threshold=0):
     """ 对单个音频文件进行推理, 返回预测标签的索引和分值"""
     input_data, sr = get_wav(str(wav_file), flags)
     assert sr == 16000, print('Sample rate is not 16k!')
@@ -262,28 +244,125 @@ def wav_inference(wav_file, model, flags, index_to_label, wanted_words, count,
     logits = tf.squeeze(logits, axis=0)
     predictions = np_softmax(logits)
     predicted_labels = np.argmax(predictions,)
-    top = np.argsort(predictions)
+    scores = predictions[predicted_labels]
 
     # 强制刷新缓存
     sys.stdout.flush()
+
     y_true_index = wanted_words.index('xrxr')
 
+    # model 预测的标签值
+    y_pred = index_to_label[predicted_labels]
+
     # 判断是不是 xrxr 标签数据
-    flag = True if wav_file.parent.name == 'xrxr' else False
-    if flag:
-        if predicted_labels != y_true_index:
-            print_details(wav_file, index_to_label, predicted_labels, predictions, top)
-        elif predictions[top[-1]] <= Threshold:
-            print_details(wav_file, index_to_label, predicted_labels, predictions, top)
-            count += 1
+    if wav_file.parent.name == 'xrxr':
+        y_true = 1
+        if Threshold and scores < Threshold:
+            y_pred = index_to_label[0]
     else:
-        if predicted_labels == y_true_index and predictions[top[-1]] > Threshold:
-            print_details(wav_file, index_to_label, predicted_labels, predictions, top)
-            count += 1
-    return predicted_labels, f"{predictions[top[-1]]:.4f}", count
+        y_true = 0
+        if Threshold and (predicted_labels == y_true_index and scores < Threshold):
+            # print_details(wav_file, index_to_label, predicted_labels, predictions)
+            y_pred = index_to_label[0]
+    return y_true, y_pred, f"{scores*100:.2f}"
+
+
+def cal_matrix(train_dir, root_path, model, flags, index_to_label, wanted_words,
+               Threshold=0):
+    """ 多个文件进行推理, 并计算相应的混淆矩阵 / 准确率 / 唤醒率 / 误唤醒 / 漏唤醒"""
+    y_key = ['y_true_list', 'y_pred_list', 'y_score_list']
+    y_dict = dict(zip(y_key, [list() for _ in range(3)]))
+    for index, wav_file in enumerate(root_path.glob('*/*.wav')):
+        y_true, y_pred, y_scores = wav_inference(wav_file, model,
+                     flags, index_to_label, wanted_words, Threshold)
+
+        if y_pred == 'xrxr':
+            y_dict['y_pred_list'].append(1)
+        else:
+            y_dict['y_pred_list'].append(0)
+        y_dict['y_true_list'].append(y_true)
+        y_dict['y_score_list'].append(y_scores)
+
+    matrix = confusion_matrix(y_dict['y_true_list'], y_dict['y_pred_list'], labels=[1, 0])
+    tn, fp, fn, tp = confusion_matrix(y_dict['y_true_list'], y_dict['y_pred_list']).ravel()
+    acc = accuracy_score(y_dict['y_true_list'], y_dict['y_pred_list'])
+    precision = precision_score(y_dict['y_true_list'], y_dict['y_pred_list'])
+    recall = recall_score(y_dict['y_true_list'], y_dict['y_pred_list'])
+    f1 = f1_score(y_dict['y_true_list'], y_dict['y_pred_list'])
+    false_alarm_rate = fp / (fp + tn)  # 误唤醒: FN / (Total Negative)
+
+    # save txt
+    model_test_file = train_dir.parent / ('model_threshold_' + str(int(Threshold*100)) + '.txt')
+    with model_test_file.open('a') as fw:
+        fw.write(f'The model is: {train_dir.name}\n')
+        fw.write("Confusion Matrix is:\n{}\n".format(matrix))
+        fw.write("The accuracy is: {:.2f}%.\n".format(acc * 100))
+        # fw.write(f"The wake rate is: {recall*100:.2f}%.")
+        fw.write(f"The false wake rate is: {false_alarm_rate*100:.2f}%.\n")
+        fw.write(f"The wake rate is: {recall*100:.2f}%.\n")
+        fw.write(f"The f1 score is: {f1*100:.2f}%.\n\n")
+        fw.write("==============================\n\n")
+    return f'{recall*100:.2f}', f'{false_alarm_rate*100:.2f}'
+
+
+def plot_far(x_axis, y_axis, train_dir, model_test_png,
+             marker, color, threshold=[0]):
+    """ 画模型唤醒率-误唤醒率散点图 """
+    if len(threshold) == 1:
+        model_test_png = model_test_png.parent / 'model_threshold_0.png'
+
+    plt.title(f'Model Performance Test (Threshold={threshold})')
+    plt.xlabel('False wake rate')
+    plt.ylabel('Wake rate')
+    for i in range(len(train_dir)):
+        for j in range(len(threshold)):
+            if j == 0:
+                plt.scatter(x_axis[j][i], y_axis[j][i], s=80, c=color[i],
+                            marker=marker[i], label=train_dir[i].name)
+            else:
+                plt.scatter(x_axis[j][i], y_axis[j][i], s=80, c=color[i],
+                            marker=marker[i])
+            if len(threshold) > 1:
+                plt.annotate(s=f"{threshold[j]}",
+                             xytext=(x_axis[j][i], y_axis[j][i]+0.5),
+                             xy=(x_axis[j][i], y_axis[j][i]),)
+    plt.legend(loc='best')  # show 每个数据对应的标签
+    plt.savefig(model_test_png)
+    plt.show()
+
+
+def plot_acc(train_dir, marker, color):
+    acc, model_size = list(), list()
+    for path in train_dir:
+        # 读取准确率
+        print(path.name)
+        acc_file = path / 'tflite_non_stream' / 'tflite_non_stream_model_accuracy.txt'
+        with acc_file.open() as fr:
+            test_acc = fr.read().split()[0]
+            acc.append(round(float(test_acc), 2))
+        # 读取tilite 文件大小
+        keras_model = path / 'non_stream' / 'my_model.h5'
+        model_size.append((keras_model.stat().st_size)/(10**5))
+    for i in range(len(acc)):
+        plt.scatter(model_size[i], acc[i], s=80, c=color[i],
+                    marker=marker[i], label=train_dir[i].name)
+    plt.title('Model size and accuracy')
+    plt.xlabel('Model Size kb (*10^5)')
+    plt.ylabel('Accuracy')
+    plt.legend(loc='best')
+    print(acc)
+    print(model_size)
+
+    plt.savefig(train_dir[0].parent / 'size_acc.png')
+    plt.show()
 
 
 def main(_):
+    threshold = [0, 0.8, 0.9]
+    test_root_path = Path('../../local_data/test_wav')
+    train_root_path = Path('../train_model')
+    model_test_png = train_root_path / ('model_threshold.png')
+
     # 启动动态图机制
     tf1.enable_eager_execution()
     tf1.reset_default_graph()
@@ -296,32 +375,60 @@ def main(_):
     tf1.keras.backend.set_learning_phase(0)
 
     # Load flags
-    model_name = 'dscnn'
-    train_dir = Path('../train_model') / model_name
-    flags_path = train_dir / 'flags.txt'
-    with flags_path.open() as fr:
-        flags_txt = fr.read()
-    flags = eval(flags_txt)
-    flags.data_dir = '../../data'
+    train_dir = [path for path in train_root_path.iterdir() if path.is_dir()]
+    x_axis, y_axis = list(), list()  # 分别储存误唤醒率和唤醒率
+    train_dir = list(filter(lambda x: x.name == 'att_mh_rnn', train_dir))
 
-    # Prepare mapping of index to word
-    index_to_label, wanted_words = pre_idx_to_word(flags)
+    for thre in threshold:
+        for model_path in train_dir:
+            flags_path = model_path / 'flags.txt'
+            with flags_path.open() as fr:
+                flags_txt = fr.read()
+            flags = eval(flags_txt)
+            flags.data_dir = '../../data'
 
-    # prepare model
-    model = pre_model(train_dir, flags)
+            # Prepare mapping of index to word
+            index_to_label, wanted_words = pre_idx_to_word(flags)
 
-    # Load wav file
-    root_path = Path('../../local_data/test_wav/other')
+            # prepare model
+            model = pre_model(model_path, flags)
 
-    # 单个文件的测试
-    # wav_inference(root_path/'1.wav', model, flags, index_to_label)
+            # 单个文件的测试
+            # wav_inference(test_root_path/'1.wav', model, flags, index_to_label)
 
-    count = 0
-    for index, wav_file in enumerate(root_path.glob('*.wav')):
-        # parent_dir = wav_file.parent.name
-        _, _, count = wav_inference(wav_file, model, flags, index_to_label, wanted_words, count,
-                                    0.8)
-    print(f"count: {count}")
+            # 多个文件进行推理
+            print(f"{model_path.name} model inferece start...")
+            recall, far = cal_matrix(model_path, test_root_path,
+                        model, flags, index_to_label, wanted_words, thre)
+            x_axis.append(float(far))
+            y_axis.append(float(recall))
+            print(f"{model_path.name} model inferece start done!")
+
+    x_axis = np.array(x_axis).reshape((len(threshold), -1))
+    y_axis = np.array(y_axis).reshape((len(threshold), -1))
+
+    # 3.07 3.07 2.45 98.48 98.48 97.98
+    # scatter
+    x_axis = [[4.91, 5.52, 30.06, 3.07, 14.11, 45.4, 16.56, 3.07, 21.47],
+              [3.68, 3.07, 11.66, 3.07, 8.59, 19.02, 6.13, 0.0, 17.79],
+              [3.07, 2.45, 4.29, 2.45,  5.52, 8.59, 4.91, 0.0, 15.95]]
+    y_axis = [[98.48, 95.45, 100.0, 98.48, 99.49, 98.99, 100.0, 98.48, 99.49],
+              [98.48, 93.94, 98.48, 98.48, 98.99, 91.41, 96.46, 96.97, 98.99],
+              [98.48, 93.43, 96.97, 97.98, 98.48, 75.76, 93.94, 94.44, 98.99]]
+
+    # 散点的形状和颜色
+    marker = ['.', ',', 'o', 'v', '^', '<', '>', '1', '2', '3',
+              '4', '8', 's', 'p', '*', 'h', 'H', '+', 'x', 'D',
+              'd', '|', '_', 'P', 'X', 0, 1, 2, 3, 4, 5, 6, 7,
+              8, 9, 10, 11]
+    color = ['b', 'c', 'g', 'k', 'm', 'r', 'y',
+             'b', 'c', 'g', 'k', 'm', 'r', 'y']
+
+    # plot_far(x_axis, y_axis, train_dir, model_test_png,
+    #          marker, color, threshold)
+    # plot_acc(train_dir, marker, color)
+
+
 
 
 if __name__ == '__main__':

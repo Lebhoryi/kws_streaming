@@ -1,0 +1,88 @@
+The model is: lstm
+Confusion Matrix is:
+[[186  12]
+ [  5 158]]
+The accuracy is: 95.29%.
+The false wake rate is: 3.07%.
+The wake rate is: 93.94%.
+The f1 score is: 95.63%.
+
+==============================
+
+The model is: mobilenet
+Confusion Matrix is:
+[[195   3]
+ [ 19 144]]
+The accuracy is: 93.91%.
+The false wake rate is: 11.66%.
+The wake rate is: 98.48%.
+The f1 score is: 94.66%.
+
+==============================
+
+The model is: cnn
+Confusion Matrix is:
+[[196   2]
+ [ 14 149]]
+The accuracy is: 95.57%.
+The false wake rate is: 8.59%.
+The wake rate is: 98.99%.
+The f1 score is: 96.08%.
+
+==============================
+
+The model is: inception
+Confusion Matrix is:
+[[181  17]
+ [ 31 132]]
+The accuracy is: 86.70%.
+The false wake rate is: 19.02%.
+The wake rate is: 91.41%.
+The f1 score is: 88.29%.
+
+==============================
+
+The model is: mobilenet_v2
+Confusion Matrix is:
+[[191   7]
+ [ 10 153]]
+The accuracy is: 95.29%.
+The false wake rate is: 6.13%.
+The wake rate is: 96.46%.
+The f1 score is: 95.74%.
+
+==============================
+
+The model is: dscnn
+Confusion Matrix is:
+[[192   6]
+ [  0 163]]
+The accuracy is: 98.34%.
+The false wake rate is: 0.00%.
+The wake rate is: 96.97%.
+The f1 score is: 98.46%.
+
+==============================
+
+The model is: dnn
+Confusion Matrix is:
+[[196   2]
+ [ 29 134]]
+The accuracy is: 91.41%.
+The false wake rate is: 17.79%.
+The wake rate is: 98.99%.
+The f1 score is: 92.67%.
+
+==============================
+
+The model is: att_mh_rnn
+Confusion Matrix is:
+[[195   3]
+ [  5 158]]
+The accuracy is: 97.78%.
+The false wake rate is: 3.07%.
+The wake rate is: 98.48%.
+The f1 score is: 97.99%.
+
+==============================
+

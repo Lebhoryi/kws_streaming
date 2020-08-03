@@ -367,6 +367,7 @@ def model_to_saved(model_non_stream,
     model = to_streaming_inference(model_non_stream, flags, mode)
 
   save_model_summary(model, save_model_path)
+  model.save(os.path.join(save_model_path, 'my_model.h5'))
   model.save(save_model_path, include_optimizer=False, save_format='tf')
 
 

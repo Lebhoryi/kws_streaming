@@ -134,6 +134,9 @@ from kws_streaming.train import model_flags
 from kws_streaming.train import train
 import kws_streaming.train.test as test
 
+from pathlib import Path
+from argparse import Namespace
+
 FLAGS = None
 
 
@@ -157,9 +160,15 @@ def main(_):
   # write all flags settings into json
   with open(os.path.join(flags.train_dir, 'flags.json'), 'wt') as f:
     json.dump(flags.__dict__, f)
-
+  #
+  # model_path = Path('./train_model') / 'att_mh_rnn'
+  # flags_path = model_path / 'flags.txt'
+  # with flags_path.open() as fr:
+  #     flags_txt = fr.read()
+  # flags = eval(flags_txt)
   # convert to SavedModel
   test.convert_model_saved(flags, 'non_stream', Modes.NON_STREAM_INFERENCE)
+  # sys.exit(0)
   try:
     test.convert_model_saved(flags, 'stream_state_internal',
                              Modes.STREAM_INTERNAL_STATE_INFERENCE)
