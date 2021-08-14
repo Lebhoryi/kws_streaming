@@ -46,6 +46,8 @@ def train(flags):
   # Start a new TensorFlow session.
   tf.reset_default_graph()
   config = tf.ConfigProto()
+  # mirrored_strategy = tf.distribute.MirroredStrategy()
+  # config = tf.estimator.RunConfig(train_distribute=mirrored_strategy,)
   # config.gpu_options.allow_growth = True
   config.allow_soft_placement=True
   sess = tf.Session(config=config)

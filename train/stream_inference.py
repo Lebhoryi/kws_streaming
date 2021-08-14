@@ -377,7 +377,7 @@ def main(_):
     # Load flags
     train_dir = [path for path in train_root_path.iterdir() if path.is_dir()]
     x_axis, y_axis = list(), list()  # 分别储存误唤醒率和唤醒率
-    train_dir = list(filter(lambda x: x.name == 'att_mh_rnn', train_dir))
+    train_dir = list(filter(lambda x: x.name == 'gru', train_dir))
 
     for thre in threshold:
         for model_path in train_dir:
@@ -394,7 +394,8 @@ def main(_):
             model = pre_model(model_path, flags)
 
             # 单个文件的测试
-            # wav_inference(test_root_path/'1.wav', model, flags, index_to_label)
+            # wav_inference(test_root_path/'xrxr/2.wav',
+            #               model, flags, index_to_label, wanted_words,)
 
             # 多个文件进行推理
             print(f"{model_path.name} model inferece start...")
@@ -404,32 +405,29 @@ def main(_):
             y_axis.append(float(recall))
             print(f"{model_path.name} model inferece start done!")
 
-    x_axis = np.array(x_axis).reshape((len(threshold), -1))
-    y_axis = np.array(y_axis).reshape((len(threshold), -1))
-
-    # 3.07 3.07 2.45 98.48 98.48 97.98
-    # scatter
-    x_axis = [[4.91, 5.52, 30.06, 3.07, 14.11, 45.4, 16.56, 3.07, 21.47],
-              [3.68, 3.07, 11.66, 3.07, 8.59, 19.02, 6.13, 0.0, 17.79],
-              [3.07, 2.45, 4.29, 2.45,  5.52, 8.59, 4.91, 0.0, 15.95]]
-    y_axis = [[98.48, 95.45, 100.0, 98.48, 99.49, 98.99, 100.0, 98.48, 99.49],
-              [98.48, 93.94, 98.48, 98.48, 98.99, 91.41, 96.46, 96.97, 98.99],
-              [98.48, 93.43, 96.97, 97.98, 98.48, 75.76, 93.94, 94.44, 98.99]]
-
-    # 散点的形状和颜色
-    marker = ['.', ',', 'o', 'v', '^', '<', '>', '1', '2', '3',
-              '4', '8', 's', 'p', '*', 'h', 'H', '+', 'x', 'D',
-              'd', '|', '_', 'P', 'X', 0, 1, 2, 3, 4, 5, 6, 7,
-              8, 9, 10, 11]
-    color = ['b', 'c', 'g', 'k', 'm', 'r', 'y',
-             'b', 'c', 'g', 'k', 'm', 'r', 'y']
+    # x_axis = np.array(x_axis).reshape((len(threshold), -1))
+    # y_axis = np.array(y_axis).reshape((len(threshold), -1))
+    #
+    # # 9.2 1.84 1.23 99.49 99.49 97.89
+    # # scatter
+    # x_axis = [[4.91, 5.52, 30.06, 3.07, 14.11, 45.4, 16.56, 9.2, 21.47],
+    #           [3.68, 3.07, 11.66, 3.07, 8.59, 19.02, 6.13, 1.84, 17.79],
+    #           [3.07, 2.45, 4.29, 2.45,  5.52, 8.59, 4.91, 1.23, 15.95]]
+    # y_axis = [[98.48, 95.45, 100.0, 98.48, 99.49, 98.99, 100.0, 99.49, 99.49],
+    #           [98.48, 93.94, 98.48, 98.48, 98.99, 91.41, 96.46, 99.49, 98.99],
+    #           [98.48, 93.43, 96.97, 97.98, 98.48, 75.76, 93.94, 97.89, 98.99]]
+    #
+    # # 散点的形状和颜色
+    # marker = ['.', ',', 'o', 'v', '^', '<', '>', '1', '2', '3',
+    #           '4', '8', 's', 'p', '*', 'h', 'H', '+', 'x', 'D',
+    #           'd', '|', '_', 'P', 'X', 0, 1, 2, 3, 4, 5, 6, 7,
+    #           8, 9, 10, 11]
+    # color = ['b', 'c', 'g', 'k', 'm', 'r', 'y',
+    #          'b', 'c', 'g', 'k', 'm', 'r', 'y']
 
     # plot_far(x_axis, y_axis, train_dir, model_test_png,
     #          marker, color, threshold)
     # plot_acc(train_dir, marker, color)
-
-
-
 
 if __name__ == '__main__':
     # 仅使用 CPU

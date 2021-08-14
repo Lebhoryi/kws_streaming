@@ -86,3 +86,36 @@ The f1 score is: 97.99%.
 
 ==============================
 
+The model is: dscnn_mfcc
+Confusion Matrix is:
+[[197   1]
+ [  3 160]]
+The accuracy is: 98.89%.
+The false wake rate is: 1.84%.
+The wake rate is: 99.49%.
+The f1 score is: 98.99%.
+
+==============================
+
+The model is: dscnn_bn_after
+Confusion Matrix is:
+[[188  10]
+ [  9 154]]
+The accuracy is: 94.74%.
+The false wake rate is: 5.52%.
+The wake rate is: 94.95%.
+The f1 score is: 95.19%.
+
+==============================
+
+The model is: gru
+Confusion Matrix is:
+[[197   1]
+ [  7 156]]
+The accuracy is: 97.78%.
+The false wake rate is: 4.29%.
+The wake rate is: 99.49%.
+The f1 score is: 98.01%.
+
+==============================
+

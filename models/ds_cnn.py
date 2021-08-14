@@ -183,13 +183,14 @@ def model(flags):
           padding=flags.cnn1_padding,
           strides=parse(flags.cnn1_strides)))(
               net)
+  # bn 放在激活函数之后
+  net = tf.keras.layers.Activation('relu')(net)
   net = tf.keras.layers.BatchNormalization(
       momentum=flags.bn_momentum,
       center=flags.bn_center,
       scale=flags.bn_scale,
       renorm=flags.bn_renorm)(
-          net)
-  net = tf.keras.layers.Activation('relu')(net)
+      net)
 
   for kernel_size, dw2_act, dilation_rate, strides, filters, cnn2_act in zip(
       parse(flags.dw2_kernel_size), parse(flags.dw2_act),
@@ -202,21 +203,24 @@ def model(flags):
             padding=flags.dw2_padding,
             strides=strides))(
                 net)
-    net = tf.keras.layers.BatchNormalization(
-        momentum=flags.bn_momentum,
-        center=flags.bn_center,
-        scale=flags.bn_scale,
-        renorm=flags.bn_renorm)(
-            net)
+    # bn 放在激活函数之后
     net = tf.keras.layers.Activation(dw2_act)(net)
-    net = tf.keras.layers.Conv2D(kernel_size=(1, 1), filters=filters)(net)
     net = tf.keras.layers.BatchNormalization(
         momentum=flags.bn_momentum,
         center=flags.bn_center,
         scale=flags.bn_scale,
         renorm=flags.bn_renorm)(
-            net)
+        net)
+
+    net = tf.keras.layers.Conv2D(kernel_size=(1, 1), filters=filters)(net)
+    # bn 放在激活函数之后
     net = tf.keras.layers.Activation(cnn2_act)(net)
+    net = tf.keras.layers.BatchNormalization(
+        momentum=flags.bn_momentum,
+        center=flags.bn_center,
+        scale=flags.bn_scale,
+        renorm=flags.bn_renorm)(
+        net)
 
   net = Stream(
       cell=tf.keras.layers.AveragePooling2D(
